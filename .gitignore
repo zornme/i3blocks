@@ -1,4 +1,5 @@
 src/
 pkg/
+*.tar.gz
 i3blocks-*.src.tar.gz
 i3blocks-*.pkg.tar.xz
