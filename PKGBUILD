@@ -1,7 +1,7 @@
 # Maintainer: Vivien Didelot <vivien+aur@didelot.org>
 _ghuser=vivien
 pkgname=i3blocks
-pkgver=1.0
+pkgver=1.1
 pkgrel=1
 pkgdesc='Define blocks for your i3bar status line'
 arch=('any')
