@@ -9,6 +9,9 @@ url="https://github.com/$_ghuser/$pkgname"
 license=('GPL3')
 source=("https://github.com/$_ghuser/$pkgname/archive/$pkgver.tar.gz")
 md5sums=('09404d027ab88bb018ac82609a1287f4')
+optdepends=(
+  'sysstat: provides mpstat, used by the default cpu_usage script'
+)
 
 build () {
   make -C "$srcdir/$pkgname-$pkgver" VERSION="$pkgver" PREFIX=/usr
