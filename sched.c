@@ -236,6 +236,8 @@ sched_event_stdin(void)
 static int
 setup_signals(void)
 {
+	int sig;
+
 	if (sigemptyset(&sigset) == -1) {
 		errorx("sigemptyset"); /* Unlikely */
 		return 1;
@@ -247,11 +249,18 @@ setup_signals(void)
 	/* Timer signal */
 	ADD_SIG(SIGALRM);
 
+	/* Deprecated signals */
 	ADD_SIG(SIGUSR1);
 	ADD_SIG(SIGUSR2);
 
 	/* Click signal */
 	ADD_SIG(SIGIO);
+
+	/* Real-time signals for blocks */
+	for (sig = SIGRTMIN + 1; sig <= SIGRTMAX; ++sig) {
+		debug("provide signal %d (%s)", sig, strsignal(sig));
+		ADD_SIG(sig);
+	}
 
 #undef ADD_SIG
 
@@ -300,6 +309,10 @@ sched_start(struct status_line *status)
 
 		if (sig == SIGIO)
 			handle_click(status);
+		else if (sig > SIGRTMIN && sig <= SIGRTMAX)
+			sig -= SIGRTMIN;
+		else if (sig == SIGUSR1 || sig == SIGUSR2)
+			error("SIGUSR{1,2} are deprecated, ignoring.");
 	}
 
 	debug("quit scheduling");
