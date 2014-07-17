@@ -31,13 +31,7 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static volatile sig_atomic_t caughtsig;
-
-static void
-handler(int signum)
-{
-	caughtsig = signum;
-}
+static sigset_t sigset;
 
 static unsigned int
 longest_sleep(struct status_line *status)
@@ -67,7 +61,7 @@ longest_sleep(struct status_line *status)
 }
 
 static inline bool
-need_update(struct block *block)
+need_update(struct block *block, const int sig)
 {
 	bool first_time, outdated, signaled, clicked;
 
@@ -83,10 +77,10 @@ need_update(struct block *block)
 		outdated = ((long) (next_update - now)) <= 0;
 	}
 
-	if (caughtsig) {
-		signaled = caughtsig == block->signal;
-		clicked = *block->click.button != '\0';
-	}
+	if (block->signal)
+		signaled = sig == block->signal;
+
+	clicked = *block->click.button != '\0';
 
 	bdebug(block, "CHECK first_time: %s, outdated: %s, signaled: %s, clicked: %s",
 			first_time ? "YES" : "no",
@@ -98,7 +92,7 @@ need_update(struct block *block)
 }
 
 static void
-update_status_line(struct status_line *status)
+update_status_line(struct status_line *status, const int sig)
 {
 	int i;
 
@@ -113,7 +107,7 @@ update_status_line(struct status_line *status)
 		}
 
 		/* If a block needs an update, reset and execute it */
-		if (need_update(updated_block)) {
+		if (need_update(updated_block, sig)) {
 			struct click click;
 
 			/* save click info and restore config values */
@@ -127,9 +121,6 @@ update_status_line(struct status_line *status)
 			memset(&updated_block->click, 0, sizeof(struct click));
 		}
 	}
-
-	if (caughtsig > 0)
-		caughtsig = 0;
 }
 
 /*
@@ -202,32 +193,9 @@ handle_click(struct status_line *status)
 }
 
 static int
-sched_use_signal(const int sig)
-{
-	struct sigaction sa;
-
-	sa.sa_handler = handler;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART; /* Restart functions if interrupted by handler */
-
-	if (sigaction(sig, &sa, NULL) == -1) {
-		errorx("sigaction");
-		return 1;
-	}
-
-	return 0;
-}
-
-static int
 sched_event_stdin(void)
 {
 	int flags;
-
-	/* Setup signal handler for stdin */
-	if (sched_use_signal(SIGIO)) {
-		error("failed to set SIGIO");
-		return 1;
-	}
 
 	/* Set owner process that is to receive "I/O possible" signal */
 	if (fcntl(STDIN_FILENO, F_SETOWN, getpid()) == -1) {
@@ -245,27 +213,47 @@ sched_event_stdin(void)
 	return 0;
 }
 
-int
-sched_init(void)
+static int
+setup_signals(void)
 {
-	/* Setup signal handler for blocks */
-	if (sched_use_signal(SIGUSR1)) {
-		error("failed to set SIGUSR1");
+	if (sigemptyset(&sigset) == -1) {
+		errorx("sigemptyset"); /* Unlikely */
 		return 1;
 	}
 
-	if (sched_use_signal(SIGUSR2)) {
-		error("failed to set SIGUSR2");
+#define ADD_SIG(_sig) \
+	if (sigaddset(&sigset, _sig) == -1) { errorx("sigaddset(%d)", _sig); return 1; }
+
+	/* Timer signal */
+	ADD_SIG(SIGALRM);
+
+	ADD_SIG(SIGUSR1);
+	ADD_SIG(SIGUSR2);
+
+	/* Click signal */
+	ADD_SIG(SIGIO);
+
+#undef ADD_SIG
+
+	/* Block signals for which we are interested in waiting */
+	if (sigprocmask(SIG_SETMASK, &sigset, NULL) == -1) {
+		errorx("sigprocmask");
 		return 1;
 	}
+
+	return 0;
+}
+
+int
+sched_init(struct status_line *status)
+{
+	if (setup_signals())
+		return 1;
 
 	/* Setup event I/O for stdin (clicks) */
-	if (!isatty(STDIN_FILENO)) {
-		if (sched_event_stdin()) {
-			error("failed to setup event I/O for stdin");
+	if (!isatty(STDIN_FILENO))
+		if (sched_event_stdin())
 			return 1;
-		}
-	}
 
 	return 0;
 }
@@ -274,20 +262,26 @@ void
 sched_start(struct status_line *status)
 {
 	const unsigned sleeptime = longest_sleep(status);
+	int sig = 0;
 
 	debug("starting scheduler with sleep time %d", sleeptime);
 
 	while (1) {
-		update_status_line(status);
+		update_status_line(status, sig);
 		json_print_status_line(status);
 
-		/* Sleep or force check on interruption */
-		if (sleep(sleeptime)) {
-			debug("woken up by signal %d", caughtsig);
-			if (caughtsig == SIGIO) {
-				debug("stdin readable");
-				handle_click(status);
-			}
+		alarm(sleeptime);
+		sig = sigwaitinfo(&sigset, NULL);
+		if (sig == -1) {
+			error("sigwaitinfo");
+			break;
 		}
+
+		debug("received signal %d (%s)", sig, strsignal(sig));
+
+		if (sig == SIGIO)
+			handle_click(status);
 	}
+
+	debug("quit scheduling");
 }
