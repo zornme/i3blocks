@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -58,6 +59,25 @@ longest_sleep(struct status_line *status)
 	}
 
 	return time > 0 ? time : 5; /* default */
+}
+
+static int
+setup_timer(struct status_line *status)
+{
+	const unsigned sleeptime = longest_sleep(status);
+
+	struct itimerval itv = {
+		.it_value.tv_sec = sleeptime,
+		.it_interval.tv_sec = sleeptime,
+	};
+
+	if (setitimer(ITIMER_REAL, &itv, NULL) == -1) {
+		errorx("setitimer");
+		return 1;
+	}
+
+	debug("starting timer with interval of %d seconds", sleeptime);
+	return 0;
 }
 
 static inline bool
@@ -250,6 +270,9 @@ sched_init(struct status_line *status)
 	if (setup_signals())
 		return 1;
 
+	if (setup_timer(status))
+		return 1;
+
 	/* Setup event I/O for stdin (clicks) */
 	if (!isatty(STDIN_FILENO))
 		if (sched_event_stdin())
@@ -261,16 +284,12 @@ sched_init(struct status_line *status)
 void
 sched_start(struct status_line *status)
 {
-	const unsigned sleeptime = longest_sleep(status);
 	int sig = 0;
-
-	debug("starting scheduler with sleep time %d", sleeptime);
 
 	while (1) {
 		update_status_line(status, sig);
 		json_print_status_line(status);
 
-		alarm(sleeptime);
 		sig = sigwaitinfo(&sigset, NULL);
 		if (sig == -1) {
 			error("sigwaitinfo");

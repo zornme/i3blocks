@@ -83,7 +83,7 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (sched_init())
+	if (sched_init(status))
 		return 1;
 
 	start();

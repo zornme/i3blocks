@@ -19,7 +19,7 @@
 #ifndef _SCHED_H
 #define _SCHED_H
 
-int sched_init(void);
+int sched_init(struct status_line *);
 void sched_start(struct status_line *);
 
 #endif /* _SCHED_H */
