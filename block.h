@@ -48,8 +48,12 @@ struct block {
 	MEMBER(command, 1024, string);
 	unsigned interval;
 	unsigned signal;
-	unsigned long last_update;
+	unsigned long timestamp;
 	struct click click;
+
+	pid_t pid;
+	int pipe;
+	int code;
 
 #undef MEMBER
 };
@@ -69,6 +73,7 @@ struct status_line {
 #define berrorx(block, msg, ...) \
 	errorx("[%s] " msg, block->name, ##__VA_ARGS__)
 
+void block_spawn(struct block *);
 void block_update(struct block *);
 
 #endif /* _BLOCK_H */

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -87,12 +88,12 @@ need_update(struct block *block, const int sig)
 
 	first_time = outdated = signaled = clicked = false;
 
-	if (block->last_update == 0)
+	if (block->timestamp == 0)
 		first_time = true;
 
 	if (block->interval) {
 		const unsigned long now = time(NULL);
-		const unsigned long next_update = block->last_update + block->interval;
+		const unsigned long next_update = block->timestamp + block->interval;
 
 		outdated = ((long) (next_update - now)) <= 0;
 	}
@@ -111,20 +112,46 @@ need_update(struct block *block, const int sig)
 	return first_time || outdated || signaled || clicked;
 }
 
+static struct block *
+reap(struct status_line *bar)
+{
+	int status, i;
+	struct block *block = NULL;
+
+	pid_t pid = waitpid(-1, &status, WNOHANG);
+	if (pid == -1) {
+		if (errno != ECHILD)
+			errorx("waitpid");
+		return NULL;
+	}
+	
+	/* Child(ren) exist, but not dead yet */
+	if (pid == 0)
+		return NULL;
+		
+
+	for (i = 0; i < bar->num; ++i) {
+		struct block *updated_block = bar->updated_blocks + i;
+		if (updated_block->pid == pid) {
+			block = updated_block;
+			block->code = WEXITSTATUS(status);
+			bdebug(block, "process %d returned %d", block->pid, block->code);
+			block->pid = 0;
+			break;
+		}
+	}
+
+	return block;
+}
+
 static void
-update_status_line(struct status_line *status, const int sig)
+poll_status_line(struct status_line *status, const int sig)
 {
 	int i;
 
 	for (i = 0; i < status->num; ++i) {
 		const struct block *config_block = status->blocks + i;
 		struct block *updated_block = status->updated_blocks + i;
-
-		/* Skip static block */
-		if (!*config_block->command) {
-			bdebug(config_block, "no command, skipping");
-			continue;
-		}
 
 		/* If a block needs an update, reset and execute it */
 		if (need_update(updated_block, sig)) {
@@ -135,7 +162,7 @@ update_status_line(struct status_line *status, const int sig)
 			memcpy(updated_block, config_block, sizeof(struct block));
 			memcpy(&updated_block->click, &click, sizeof(struct click));
 
-			block_update(updated_block);
+			block_spawn(updated_block);
 
 			/* clear click info */
 			memset(&updated_block->click, 0, sizeof(struct click));
@@ -202,11 +229,10 @@ handle_click(struct status_line *status)
 			struct block *block = status->updated_blocks + i;
 
 			if (strcmp(block->name, name) == 0 && strcmp(block->instance, instance) == 0) {
-				memcpy(&block->click, &click, sizeof(struct click));
-
-				/* It shouldn't be likely to have several blocks with the same name/instance, so stop here */
 				bdebug(block, "clicked");
-				break;
+				memcpy(&block->click, &click, sizeof(struct click));
+				block_spawn(block);
+				break; /* It shouldn't be likely to have several blocks with the same name/instance */
 			}
 		}
 	}
@@ -248,6 +274,9 @@ setup_signals(void)
 
 	/* Timer signal */
 	ADD_SIG(SIGALRM);
+
+	/* Block updates (forks) */
+	ADD_SIG(SIGCHLD);
 
 	/* Deprecated signals */
 	ADD_SIG(SIGUSR1);
@@ -293,26 +322,60 @@ sched_init(struct status_line *status)
 void
 sched_start(struct status_line *status)
 {
-	int sig = 0;
+	struct block *block;
+	int sig;
+
+	/* Initial display, in case the user sets loading labels */
+	poll_status_line(status, 0);
+	json_print_status_line(status);
 
 	while (1) {
-		update_status_line(status, sig);
-		json_print_status_line(status);
-
 		sig = sigwaitinfo(&sigset, NULL);
 		if (sig == -1) {
 			error("sigwaitinfo");
 			break;
 		}
 
-		debug("received signal %d (%s)", sig, strsignal(sig));
+		debug("at %ld received signal %d (%s)", time(NULL), sig, strsignal(sig));
 
-		if (sig == SIGIO)
+		/* Interval tick? */
+		if (sig == SIGALRM) {
+			poll_status_line(status, 0);
+			continue;
+			/* XXX maybe no need_update() */
+		}
+
+		/* Child dead? */
+		if (sig == SIGCHLD) {
+			do {
+				block = reap(status);
+				if (block)
+					block_update(block);
+			} while (block);
+			json_print_status_line(status);
+			continue;
+		}
+
+		/* Block clicked? */
+		if (sig == SIGIO) {
 			handle_click(status);
-		else if (sig > SIGRTMIN && sig <= SIGRTMAX)
+			continue;
+		}
+
+		/* Blocks signaled? */
+		if (sig > SIGRTMIN && sig <= SIGRTMAX) {
 			sig -= SIGRTMIN;
-		else if (sig == SIGUSR1 || sig == SIGUSR2)
+			poll_status_line(status, sig);
+			continue;
+		}
+
+		/* Deprecated signals? */
+		if (sig == SIGUSR1 || sig == SIGUSR2) {
 			error("SIGUSR{1,2} are deprecated, ignoring.");
+			continue;
+		}
+
+		debug("unhandled signal %d", sig);
 	}
 
 	debug("quit scheduling");
