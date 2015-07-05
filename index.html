@@ -152,7 +152,8 @@ used by <strong>i3blocks</strong> to describe when and how to update a block.
 All the supported properties are described below.</p>
 
 <p>The following keys are standard, see
-<a href="">http://i3wm.org/docs/i3bar-protocol.html</a> for details.</p>
+<a href="http://i3wm.org/docs/i3bar-protocol.html" data-bare-link="true">http://i3wm.org/docs/i3bar-protocol.html</a>
+for details.</p>
 
 <ul>
 <li><code>full_text</code></li>
@@ -165,6 +166,7 @@ All the supported properties are described below.</p>
 <li><code>urgent</code></li>
 <li><code>separator</code></li>
 <li><code>separator_block_width</code></li>
+<li><code>markup</code></li>
 </ul>
 
 
@@ -180,13 +182,18 @@ useful to simulate buttons).
 If "once" (or -1), the block will be executed only on startup (note that a
 click or signal will still trigger an update).
 If "repeat" (or -2), the block will be spawned on startup, and as soon as
-it terminates (useful to repeat blocking commands). Use with caution!</p></dd>
+it terminates (useful to repeat blocking commands). Use with caution!
+If "persist" (or -3), the block will be executed only on startup, and
+updated as soon as it outputs a line. Thus limited to single line updates.</p></dd>
 <dt class="flush"><code>signal</code></dt><dd><p>The signal number used to update the block. All the real-time (think
 prioritized and queueable) signals are available to the user. The number is
 valid between 1 and N, where SIGRTMIN+N = SIGRTMAX. (Note: there are 31
 real-time signals in Linux.) For instance, <code>signal=10</code> means that this
 block will be updated when <strong>i3blocks</strong> receives SIGRTMIN+10.</p></dd>
 <dt class="flush"><code>label</code></dt><dd><p>An optional label to preprend to the <code>full_text</code> after an update.</p></dd>
+<dt class="flush"><code>format</code></dt><dd><p>This property specifies the format of the output text. The default format
+is plain text, as described in the <a href="#COMMAND" title="COMMAND" data-bare-link="true">COMMAND</a> section.
+If "json" (or 1) is used, the block output is parsed as JSON.</p></dd>
 </dl>
 
 
@@ -198,9 +205,9 @@ block will be updated when <strong>i3blocks</strong> receives SIGRTMIN+10.</p></
 Each non-empty line of the output will overwrite the corresponding property:</p>
 
 <ol>
-<li> full_text</li>
-<li> short_text</li>
-<li> color</li>
+<li>full_text</li>
+<li>short_text</li>
+<li>color</li>
 </ol>
 
 
@@ -232,7 +239,7 @@ eventually an empty string as the value.</p>
 <dt><code>BLOCK_NAME</code></dt><dd><p>The name of the block (usually the section name).</p></dd>
 <dt><code>BLOCK_INSTANCE</code></dt><dd><p>An optional argument to the script.</p></dd>
 <dt><code>BLOCK_BUTTON</code></dt><dd><p>Mouse button (1, 2 or 3) if the block was clicked.</p></dd>
-<dt><code>BLOCK_X</code> and <code>BLOCK_Y</code></dt><dd><p>Coordinates where the click occured, if the block was clicked.</p></dd>
+<dt><code>BLOCK_X</code> and <code>BLOCK_Y</code></dt><dd><p>Coordinates where the click occurred, if the block was clicked.</p></dd>
 </dl>
 
 
@@ -325,11 +332,11 @@ source of examples for blocks and screenshots.</p>
 
 <h2 id="AUTHOR">AUTHOR</h2>
 
-<p>Written by Vivien Didelot <a href="&#x6d;&#x61;&#105;&#x6c;&#x74;&#111;&#x3a;&#118;&#x69;&#x76;&#105;&#101;&#110;&#x2e;&#100;&#105;&#100;&#101;&#x6c;&#x6f;&#x74;&#64;&#103;&#109;&#97;&#105;&#x6c;&#46;&#99;&#111;&#x6d;" data-bare-link="true">&#x76;&#x69;&#x76;&#105;&#x65;&#x6e;&#x2e;&#x64;&#105;&#100;&#x65;&#108;&#111;&#116;&#64;&#x67;&#109;&#97;&#105;&#108;&#x2e;&#99;&#111;&#x6d;</a>.</p>
+<p>Written by Vivien Didelot <a href="&#x6d;&#x61;&#105;&#x6c;&#116;&#111;&#58;&#118;&#105;&#118;&#x69;&#101;&#x6e;&#46;&#x64;&#x69;&#100;&#x65;&#108;&#111;&#116;&#x40;&#x67;&#109;&#x61;&#105;&#108;&#46;&#99;&#x6f;&#x6d;" data-bare-link="true">&#x76;&#105;&#x76;&#105;&#101;&#x6e;&#46;&#100;&#105;&#x64;&#x65;&#108;&#111;&#116;&#x40;&#103;&#109;&#x61;&#105;&#108;&#x2e;&#x63;&#x6f;&#x6d;</a>.</p>
 
 <h2 id="COPYRIGHT">COPYRIGHT</h2>
 
-<p>Copyright (C) 2014 Vivien Didelot <a href="&#x6d;&#97;&#105;&#x6c;&#116;&#111;&#58;&#x76;&#105;&#x76;&#x69;&#x65;&#110;&#46;&#100;&#105;&#x64;&#x65;&#108;&#x6f;&#x74;&#64;&#103;&#109;&#97;&#x69;&#108;&#46;&#x63;&#111;&#x6d;" data-bare-link="true">&#118;&#105;&#118;&#105;&#101;&#110;&#46;&#x64;&#105;&#100;&#101;&#x6c;&#111;&#116;&#x40;&#x67;&#x6d;&#97;&#x69;&#x6c;&#46;&#99;&#x6f;&#109;</a>
+<p>Copyright (C) 2014 Vivien Didelot <a href="&#109;&#97;&#x69;&#108;&#116;&#111;&#x3a;&#x76;&#105;&#118;&#105;&#101;&#110;&#46;&#100;&#105;&#x64;&#101;&#108;&#111;&#116;&#64;&#103;&#109;&#x61;&#105;&#108;&#46;&#x63;&#111;&#x6d;" data-bare-link="true">&#118;&#105;&#118;&#105;&#101;&#110;&#46;&#x64;&#105;&#100;&#x65;&#108;&#111;&#116;&#64;&#103;&#x6d;&#97;&#x69;&#x6c;&#46;&#x63;&#x6f;&#109;</a>
 License GPLv3+: GNU GPL version 3 or later <a href="http://gnu.org/licenses/gpl.html" data-bare-link="true">http://gnu.org/licenses/gpl.html</a>.</p>
 
 <p>This is free software: you are free to change and redistribute it. There is NO
@@ -338,7 +345,7 @@ WARRANTY, to the extent permitted by law.</p>
 
   <ol class='man-decor man-foot man foot'>
     <li class='tl'></li>
-    <li class='tc'>November 2014</li>
+    <li class='tc'>July 2015</li>
     <li class='tr'>i3blocks(1)</li>
   </ol>
 
